@@ -1,0 +1,24 @@
+{
+  "version": "local_fullflow_20261119_r2_source_candidate",
+  "paths": {
+    "python_service": "../external/envs/camera/Scripts/python.exe",
+    "python_face": "../external/envs/face/python.exe",
+    "python_econ": "../external/envs/econ/python.exe",
+    "camera_assets": "../external/CameraHMR",
+    "econ_source": "../external/ECON",
+    "legacy_project": "../external/project",
+    "legacy_aghc": "../external/AGHC",
+    "legacy_tools": "../external/AGHC/tools",
+    "research_root": "../external/project_resources",
+    "camera_tools": "../external/integration_tools",
+    "econ_staged_entry": "../external/authorized_r2/staged_infer.py",
+    "econ_config": "../external/ECON/configs/econ-windows-lowmem.yaml",
+    "smpl_models": "../external/ECON/data/smpl_related/models",
+    "u2net_root": "../external/ICON/data/rembg",
+    "torch_cache": "../external/ICON/data/torch_cache",
+    "vsdevcmd": "../external/VisualStudio/Common7/Tools/VsDevCmd.bat",
+    "frozen_fit": "../private_assets/frozen35_fit.json",
+    "cache_manifest": "../private_assets/optional_cache/manifest.json",
+    "cache_features": "../private_assets/optional_cache/features.json"
+  }
+}

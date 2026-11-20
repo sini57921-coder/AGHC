@@ -1,0 +1,5 @@
+function openPhoto(url,title){const dialog=document.getElementById('photoDialog');document.getElementById('photoFull').src=url;document.getElementById('photoFull').alt=title||'原始图片';document.getElementById('photoDialogTitle').textContent=title||'原始图片';document.getElementById('photoViewport').classList.remove('original-size');document.getElementById('photoOriginal').textContent='原始尺寸';dialog.showModal()}
+document.getElementById('photoClose').onclick=()=>document.getElementById('photoDialog').close();
+document.getElementById('photoOriginal').onclick=()=>{const original=document.getElementById('photoViewport').classList.toggle('original-size');document.getElementById('photoOriginal').textContent=original?'适应窗口':'原始尺寸'};
+document.getElementById('photoDialog').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.close()});
+document.addEventListener('click',e=>{const trigger=e.target.closest('[data-full-image]');if(trigger)openPhoto(trigger.dataset.fullImage,trigger.dataset.photoTitle);else if(e.target.closest('#original')){const img=document.querySelector('#original img');if(img&&img.naturalWidth)openPhoto(img.src,'当前照片')}});

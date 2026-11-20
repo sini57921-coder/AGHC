@@ -1,0 +1,187 @@
+{
+  "schema_version": "1.0",
+  "feature_count": 35,
+  "feature_order": [
+    {
+      "index_1_based": 1,
+      "name": "econ_canonical_apose_height",
+      "definition": "ECON SMPL-X canonical A-pose mesh height; ECON model units."
+    },
+    {
+      "index_1_based": 2,
+      "name": "econ_beta_0",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 3,
+      "name": "econ_beta_1",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 4,
+      "name": "econ_beta_2",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 5,
+      "name": "econ_beta_3",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 6,
+      "name": "econ_beta_4",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 7,
+      "name": "econ_beta_5",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 8,
+      "name": "econ_beta_6",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 9,
+      "name": "econ_beta_7",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 10,
+      "name": "econ_beta_8",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 11,
+      "name": "econ_beta_9",
+      "definition": "ECON SMPL-X beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 12,
+      "name": "camerahmr_canonical_apose_height",
+      "definition": "CameraHMR SMPL canonical A-pose mesh height; CameraHMR model units."
+    },
+    {
+      "index_1_based": 13,
+      "name": "camerahmr_beta_0",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 14,
+      "name": "camerahmr_beta_1",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 15,
+      "name": "camerahmr_beta_2",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 16,
+      "name": "camerahmr_beta_3",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 17,
+      "name": "camerahmr_beta_4",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 18,
+      "name": "camerahmr_beta_5",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 19,
+      "name": "camerahmr_beta_6",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 20,
+      "name": "camerahmr_beta_7",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 21,
+      "name": "camerahmr_beta_8",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 22,
+      "name": "camerahmr_beta_9",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 23,
+      "name": "camerahmr_beta_10",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 24,
+      "name": "camerahmr_beta_11",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 25,
+      "name": "camerahmr_beta_12",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 26,
+      "name": "camerahmr_beta_13",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 27,
+      "name": "camerahmr_beta_14",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 28,
+      "name": "camerahmr_beta_15",
+      "definition": "CameraHMR SMPL beta coefficient; model coefficient."
+    },
+    {
+      "index_1_based": 29,
+      "name": "face_height_over_width",
+      "definition": "MediaPipe FaceMesh distance(10,152)/distance(234,454); dimensionless."
+    },
+    {
+      "index_1_based": 30,
+      "name": "eyes_over_width",
+      "definition": "MediaPipe FaceMesh distance(33,263)/distance(234,454); dimensionless."
+    },
+    {
+      "index_1_based": 31,
+      "name": "mouth_over_width",
+      "definition": "MediaPipe FaceMesh distance(61,291)/distance(234,454); dimensionless."
+    },
+    {
+      "index_1_based": 32,
+      "name": "lower_jaw_over_width",
+      "definition": "MediaPipe FaceMesh distance(172,397)/distance(234,454); dimensionless."
+    },
+    {
+      "index_1_based": 33,
+      "name": "nose_chin_over_height",
+      "definition": "MediaPipe FaceMesh distance(1,152)/distance(10,152); dimensionless."
+    },
+    {
+      "index_1_based": 34,
+      "name": "nasion_nose_over_height",
+      "definition": "MediaPipe FaceMesh distance(168,1)/distance(10,152); dimensionless."
+    },
+    {
+      "index_1_based": 35,
+      "name": "face_available",
+      "definition": "1 when all six face ratios are available; otherwise 0."
+    }
+  ],
+  "input_components": {
+    "body28": "Exactly 28 finite values: ECON canonical A-pose height, ECON beta[0:10], CameraHMR canonical A-pose height, CameraHMR beta[0:16].",
+    "face_ratios": "Six ratios in feature order 29–34; use null when unavailable. Missing ratios are imputed using the frozen training medians in config/frozen35_coefficients.json; feature 35 is set to 0.",
+    "missing_body_features": "Not imputed. The image pipeline records a front-end failure."
+  },
+  "units": "Heights in the feature vector remain in their respective model units. Beta values are model coefficients; face features are dimensionless. The regression output is centimeters."
+}
