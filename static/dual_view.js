@@ -8,7 +8,7 @@ function makeViewer(kind){
   const camera=new THREE.PerspectiveCamera(38,1,.001,1000);camera.position.set(0,0,4);
   const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));stage.prepend(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xffffff,0x42454a,.85));const light=new THREE.DirectionalLight(0xffffff,.65);light.position.set(3,5,5);scene.add(light);
-  const state={scene,camera,renderer,model:null,initial:null,requestId:0,target:new THREE.Vector3(),theta:0,phi:Math.PI/2,distance:4};viewerStates[kind]=state;
+  const state={scene,camera,renderer,model:null,initial:null,requestId:0,target:new THREE.Vector3(),theta:0,phi:Math.PI/2,distance:4,colorMode:'original'};viewerStates[kind]=state;
   const resize=()=>{const w=stage.clientWidth,h=stage.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);if(state.model)fitViewer(kind,false)};
   new ResizeObserver(resize).observe(stage);resize();
   const canvas=renderer.domElement,pointers=new Map();let lastX=0,lastY=0,pinch=null;
@@ -23,7 +23,7 @@ function makeViewer(kind){
   });
   canvas.addEventListener('wheel',e=>{e.preventDefault();if(!state.model)return;state.distance*=e.deltaY>0?1.08:1/1.08;state.distance=Math.max(state.radius*.2,Math.min(state.radius*20,state.distance));updateCamera(state)},{passive:false});canvas.addEventListener('contextmenu',e=>e.preventDefault());
   setViewerTools(kind,false);
-  const cap=kind==='body'?'Body':'Clothing';$('reset'+cap).onclick=()=>fitViewer(kind,true);$('front'+cap).onclick=()=>setView(kind,0);$('side'+cap).onclick=()=>setView(kind,Math.PI/2);
+  const cap=kind==='body'?'Body':'Clothing';$('reset'+cap).onclick=()=>fitViewer(kind,true);$('front'+cap).onclick=()=>setView(kind,0);$('side'+cap).onclick=()=>setView(kind,Math.PI/2);if(kind==='clothing')$('colorModeClothing').onclick=()=>setClothingColorMode(viewerStates.clothing.colorMode==='original'?'solid':'original');
 }
 function updateCamera(state){const r=state.distance,s=Math.sin(state.phi);state.camera.position.set(state.target.x+r*s*Math.sin(state.theta),state.target.y+r*Math.cos(state.phi),state.target.z+r*s*Math.cos(state.theta));state.camera.lookAt(state.target);state.camera.updateMatrixWorld(true)}
 function fitViewer(kind,resetOrientation=true){const state=viewerStates[kind];if(!state.model)return;if(resetOrientation){state.theta=0;state.phi=Math.PI/2;markViewPreset(kind,'front')}
@@ -37,7 +37,7 @@ function fitViewer(kind,resetOrientation=true){const state=viewerStates[kind];if
 }
 function setView(kind,theta){const state=viewerStates[kind];if(!state.model)return;state.theta=theta;state.phi=Math.PI/2;fitViewer(kind,false);markViewPreset(kind,theta===0?'front':'side')}
 function markViewPreset(kind,mode){const cap=kind==='body'?'Body':'Clothing';for(const preset of ['front','side'])$(preset+cap).setAttribute('aria-pressed',String(mode===preset))}
-function setViewerTools(kind,ready){const cap=kind==='body'?'Body':'Clothing';for(const tool of ['front','side','reset','save'])$(tool+cap).disabled=!ready;if(!ready)markViewPreset(kind,null)}
+function setViewerTools(kind,ready){const cap=kind==='body'?'Body':'Clothing';for(const tool of ['front','side','reset','save'])$(tool+cap).disabled=!ready;if(kind==='clothing')renderClothingColorControl(ready);if(!ready)markViewPreset(kind,null)}
 
 function setViewerMessage(kind,message,error=false){
   const element=$(kind+'Message');
@@ -72,15 +72,29 @@ function clearAllModels(message){
 
 function normalizeViewer(kind,group){group.updateMatrixWorld(true);fitViewer(kind,true)}
 
-function colorViewer(group,kind){
+function colorViewer(group,kind,colorMode='original'){
   group.traverse(o=>{
     if(!o.isMesh)return;
+    const previous=Array.isArray(o.material)?o.material:[o.material];previous.filter(Boolean).forEach(material=>material.dispose());
+    const useOriginalColors=kind==='clothing'&&colorMode==='original'&&!!o.geometry.getAttribute('color');
     o.material=new THREE.MeshStandardMaterial({
-      color:kind==='clothing'?0xffffff:0xc9ced5,
-      vertexColors:kind==='clothing'&&!!o.geometry.getAttribute('color'),
+      color:kind==='clothing'&&colorMode==='original'?0xffffff:0xc9ced5,
+      vertexColors:useOriginalColors,
       roughness:.72,metalness:.02,side:THREE.DoubleSide
     });
   });
+}
+
+function renderClothingColorControl(enabled){
+  const button=$('colorModeClothing'),mode=viewerStates.clothing?.colorMode||'original',isOriginal=mode==='original';
+  button.textContent=isOriginal?'显示：原始颜色':'显示：纯色形体';
+  button.title=isOriginal?'当前使用网格原始顶点颜色；点击切换为纯色形体':'当前显示纯色形体；点击恢复网格原始顶点颜色';
+  button.setAttribute('aria-pressed',String(isOriginal));button.disabled=!enabled;
+}
+
+function setClothingColorMode(mode){
+  const state=viewerStates.clothing;if(!state?.model)return;
+  state.colorMode=mode==='solid'?'solid':'original';colorViewer(state.model,'clothing',state.colorMode);renderClothingColorControl(true);
 }
 
 function loadViewer(kind,url){
@@ -95,7 +109,7 @@ function loadViewer(kind,url){
     }
     state.model=group;
     normalizeViewer(kind,group);
-    colorViewer(group,kind);
+    colorViewer(group,kind,state.colorMode||'original');
     state.scene.add(group);
     $(kind+'Message').style.display='none';$(kind+'State').textContent='已加载';setViewerTools(kind,true);
     log((kind==='clothing'?'原姿态着装':'标准A姿态人体')+'网格加载完成。','ok');
