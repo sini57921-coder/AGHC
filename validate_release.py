@@ -25,7 +25,8 @@ with tempfile.TemporaryDirectory(dir=ROOT) as temp:
     import release_config
     assert release_config.path('python_service') == (local.parent / 'external/python_service').resolve()
     checks['relative_config_resolution'] = True
-    imported = ['release_config', 'input_image', 'ai_adapter', 'frozen35_single', 'clothed_task', 'body_mesh_task']
+    imported = ['release_config', 'input_image', 'ai_adapter', 'frozen35_single', 'clothed_task',
+                'body_mesh_task', 'generate_individual_body']
     for name in imported:
         importlib.import_module(name)
     checks['lightweight_imports'] = imported

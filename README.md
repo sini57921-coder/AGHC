@@ -9,14 +9,14 @@
 - `static/`：单图工作台、同任务双模型查看器、照片预览与结果摘要导出；不附带历史人物案例。
 - `task_api.py`、`input_image.py`、`target_selection.py`：串行任务、分阶段状态、解码、EXIF方向纠正、统一RGB输入与缓存身份。
 - `frozen35_single.py`、`ai_adapter.py`：同图35维构造、缺脸处理、标准化和冻结回归调用；顺序见[特征定义](config/feature_schema.json)。
-- `clothed_task.py`、`body_mesh_task.py`等：读取同任务个体参数与ECON产物，组织原姿态着装和规范A姿态人体展示。等比展示缩放不证明厘米准确或隐藏形体真实。
+- `clothed_task.py`、`body_mesh_task.py`、`generate_individual_body.py`：读取同任务个体参数与ECON产物，组织原姿态着装和规范A姿态人体生成。该入口可独立导入；实际生成时从配置的 `econ_source` 加载ECON随附的SMPL-X运行代码，并从 `smpl_models` 读取授权模型文件。等比展示缩放不证明厘米准确或隐藏形体真实。
 - `environments/`：实际三个Python环境的版本参照，不是经过独立重建验证的安装锁文件。
 
 ## 外部条件与启动
 
 1. 准备Windows及记录中的服务/CameraHMR、ECON、人脸三个Python环境，不合并、不自动升级。版本见[依赖记录](environments/README.md)。CUDA、Visual Studio与模型资产须另行准备。
 2. 按原许可从官方取得[CameraHMR](https://github.com/pixelite1201/CameraHMR)、[ECON](https://github.com/YuliangXiu/ECON)、SMPL-X等依赖。固定版本、文件名和放置方法见[外部依赖表](EXTERNAL_DEPENDENCIES.csv)。
-3. 完整运行还需要合法提供的r2 ECON派生入口及配套修改、三个CameraHMR单图工具、AGHC helper和canonical CLI。**它们没有已确认的公开获取入口，安装默认官方仓库不能代替。**
+3. 规范人体生成入口已随本仓库提供，但依赖上一步配置的ECON/SMPL-X代码与模型资产。完整单图运行仍需要合法提供的r2 ECON派生入口及配套修改、三个CameraHMR单图衔接工具、AGHC helper和其canonical CLI。**这些集成组件目前没有已确认的公开获取入口；安装默认官方仓库不能代替。** 本仓库不包含或替代它们。
 4. 冻结回归配置暂留内部。必须具备训练时的标准化、缺脸插补参数、35维回归系数与截距；仅有特征定义不能复现厘米预测。不得用重新拟合或其他模型替代。
 5. 取得上述条件后，复制 `config.example.json` 为不入库的 `config.local.json` 并填写路径，相对路径以配置文件目录为基准。
 
