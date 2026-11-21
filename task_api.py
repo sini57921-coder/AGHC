@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import Body
 from target_selection import candidates_for, prepare_target
 from econ_paths import current_econ
+from task_resume import resume_allowed, prepare_resume
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from ai_adapter import run_ai
@@ -81,6 +82,9 @@ def close_task(task, interrupted=False):
     else:
         task["end_to_end_time"] = round(task["finished_at"] - task["started_at"], 3)
         task["timing_scope"] = "continuous"
+        if task.get("preserved_stages"):
+            task["timing_scope"] = "resumed_stages"
+            task["display_time_note"] = "本次接续耗时，不含先前已完成阶段；历史分段不可相加为首次完整耗时"
     save(task)
 
 for task_file in TASKS.glob("*.json"):
@@ -103,52 +107,57 @@ for task_file in TASKS.glob("*.json"):
     records[task.get("task_id", task_file.stem)] = task
 
 
-def worker():
-    while True:
-        task_id = pending.get()
+def process_task(task):
+    with guard:
+        task.update(status="running", started_at=time.time())
+        task["queue_time"] = round(task["started_at"] - task["submitted_at"], 3) if task.get("submitted_at") else None
+        save(task)
+    if task.get("height_status") != "ok":
         with guard:
-            task = records[task_id]
-            task.update(status="running", height_status="running", started_at=time.time(), height_started_at=time.time())
-            task["queue_time"] = round(task["started_at"] - task["submitted_at"], 3) if task.get("submitted_at") else None
-            save(task)
+            task.update(height_status="running", height_started_at=time.time()); save(task)
         try:
             result = run_ai(task["image_path"], run_key=task.get("run_key"), force_fresh=task.get("force_fresh", False))
         except Exception as error:
-            result = {"status": "failed", "height_cm": None, "failure_reason": f"{type(error).__name__}: {error}", "inference_time": round(time.time() - task["started_at"], 3)}
+            result = {"status":"failed", "height_cm":None, "failure_reason":f"{type(error).__name__}: {error}", "inference_time":round(time.time()-task["height_started_at"],3)}
         if result.get("status") == "failed" and "person_binding_ambiguous" in (result.get("failure_reason") or ""):
             choices = candidates_for(task, BASE)
             if choices:
                 with guard:
-                    task.update(status="awaiting_target", height_status="awaiting_target", target_candidates=choices,
-                                clothing_status="queued", body_status="queued", failure_reason=None)
-                    save(task)
-                pending.task_done()
-                continue
+                    task.update(status="awaiting_target", height_status="awaiting_target", target_candidates=choices, failure_reason=None); save(task)
+                return
         with guard:
             task.update({k:v for k,v in result.items() if k != "status"})
-            task["height_status"] = result["status"]
-            task["height_finished_at"] = time.time()
-            task["height_duration"] = result.get("inference_time")
-            task["clothing_status"] = "running" if result["status"] == "ok" else "skipped"
-            task["body_status"] = "queued" if result["status"] == "ok" else "skipped"
+            task.update(height_status=result["status"], height_finished_at=time.time(), height_duration=result.get("inference_time"))
             if result["status"] != "ok":
-                cause = result.get("failure_reason") or "身高阶段未返回有效结果"
-                task["clothing_failure_reason"] = task["body_failure_reason"] = f"未运行：{cause}"
+                for stage_name in ("clothing", "body"):
+                    if task.get(stage_name+"_status") != "ok":
+                        task[stage_name+"_status"]="skipped"
+                        task[stage_name+"_failure_reason"]="未运行："+(result.get("failure_reason") or "身高阶段失败")
                 close_task(task)
-            else: save(task)
-        if result["status"] == "ok":
-            task["clothing_started_at"] = time.time()
-            with guard: save(task)
-            try: clothing = build_clothed(task)
-            except Exception as error: clothing = {"clothing_status":"failed", "clothing_failure_reason":f"{type(error).__name__}: {error}", "obj_url":None, "obj_role":None}
-            with guard:
-                task.update(clothing); task["clothing_finished_at"] = time.time(); task["clothing_duration"] = round(task["clothing_finished_at"]-task["clothing_started_at"],3); save(task)
-                task["body_status"] = "running"; task["body_started_at"] = time.time(); save(task)
-            try: body = build_body(task, clothing)
-            except Exception as error: body = {"body_status":"failed", "body_failure_reason":f"{type(error).__name__}: {error}", "body_canonical_url":None, "body_original_url":None}
-            with guard:
-                task.update(body); task["body_finished_at"] = time.time(); task["body_duration"] = round(task["body_finished_at"]-task["body_started_at"],3); close_task(task)
-        pending.task_done()
+                return
+            save(task)
+    if task.get("clothing_status") != "ok":
+        with guard:
+            task.update(clothing_status="running", clothing_started_at=time.time()); save(task)
+        try: clothing=build_clothed(task)
+        except Exception as error: clothing={"clothing_status":"failed", "clothing_failure_reason":f"{type(error).__name__}: {error}", "obj_url":None,"obj_role":None}
+        with guard:
+            task.update(clothing); task.update(clothing_finished_at=time.time(), clothing_duration=round(time.time()-task["clothing_started_at"],3)); save(task)
+    if task.get("body_status") != "ok":
+        with guard:
+            task.update(body_status="running", body_started_at=time.time()); save(task)
+        try: body=build_body(task, task)
+        except Exception as error: body={"body_status":"failed", "body_failure_reason":f"{type(error).__name__}: {error}", "body_canonical_url":None,"body_original_url":None}
+        with guard:
+            task.update(body); task.update(body_finished_at=time.time(), body_duration=round(time.time()-task["body_started_at"],3)); save(task)
+    with guard: close_task(task)
+
+
+def worker():
+    while True:
+        task_id=pending.get()
+        try: process_task(records[task_id])
+        finally: pending.task_done()
 
 
 threading.Thread(target=worker, daemon=True).start()
@@ -191,21 +200,16 @@ def task_result(task_id: str):
         task=records.get(task_id)
         if task is None: raise HTTPException(404,"任务不存在")
         choices = candidates_for(task, BASE) if task.get("status") in ("failed", "awaiting_target") else []
-        return {**task,"target_candidates":choices,"result_state":result_state(task),"stage":stage(task)}
+        return {**task,"resume_allowed":resume_allowed(task),"target_candidates":choices,"result_state":result_state(task),"stage":stage(task)}
 
 @app.post("/api/tasks/{task_id}/resume")
 def resume_task(task_id: str):
     with guard:
         task=records.get(task_id)
         if task is None: raise HTTPException(404,"任务不存在")
-        if task.get("force_fresh"):
-            raise HTTPException(409,"从头运行任务请通过网页重新提交，不使用阶段接续")
-        if task.get("status") not in ("failed","completed") or result_state(task) not in ("failed","partial"):
-            raise HTTPException(409,"仅能接续终态失败或部分失败的任务")
-        history=task.get("attempt_history",[]); old={k:v for k,v in task.items() if k not in ("attempt_history",)}; history.append(old)
-        identity={k:task[k] for k in ("task_id","image_path","image_url","image_sha256","submitted_at","method_version","run_key","force_fresh","original_image_path","original_filename","original_sha256","input_record_path","input_processing","target_selection","evaluation_scope") if k in task}
-        for key in list(task): task.pop(key)
-        task.update(identity, attempt=old.get("attempt",1)+1, attempt_history=history, submitted_at=time.time(), status="queued",result_state="waiting",height_cm=None,height_status="queued",clothing_status="queued",body_status="queued",failure_reason=None,clothing_failure_reason=None,body_failure_reason=None,obj_url=None,obj_role=None,body_canonical_url=None,body_original_url=None,inference_time=None,end_to_end_time=None,queue_time=None,height_duration=None,clothing_duration=None,body_duration=None,height_started_at=None,height_finished_at=None,clothing_started_at=None,clothing_finished_at=None,body_started_at=None,body_finished_at=None,started_at=None,finished_at=None,feature_source=None,source=None,stage="等待任务执行")
+        if not resume_allowed(task):
+            raise HTTPException(409,"当前任务不允许接续；运行中请查询状态，从头运行验收任务请按原规则提交")
+        prepare_resume(task, time.time())
         records[task_id]=task; save(task)
     pending.put(task_id); return {"task_id":task_id,"status":"queued","result_state":"waiting"}
 

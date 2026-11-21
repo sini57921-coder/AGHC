@@ -114,7 +114,7 @@ function loadTaskViewer(kind,task){
   const raw=body?task.body_canonical_url:task.obj_url;
   const url=valid&&raw?(raw.startsWith('http')?raw:API+raw):'';
   const reason=task[body?'body_failure_reason':'clothing_failure_reason'];
-  const key=[task.task_id,task.attempt||1,url,status,reason||''].join('|');
+  const key=[task.task_id,url,status,reason||''].join('|');
   if(viewerLoadKeys[kind]===key)return;
   viewerLoadKeys[kind]=key;
   if(url){loadViewer(kind,url);return}
@@ -137,10 +137,13 @@ function featureSourceText(task){const source=task.feature_source??task.source;r
 function finiteSeconds(value){return value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))?Number(value):null}
 function secondsText(value){const n=finiteSeconds(value);return n===null?'未记录':n.toFixed(3)+' 秒'}
 function formatTaskDurations(task){
-  const parts=['排队：'+secondsText(task.queue_time),'估高：'+secondsText(task.height_duration??task.inference_time)];
-  if(task.clothing_duration!==undefined)parts.push('着装：'+secondsText(task.clothing_duration));
-  if(task.body_duration!==undefined)parts.push('人体：'+secondsText(task.body_duration));
-  if(task.display_time_note||task.timing_scope==='interrupted'){
+  const retained=task.preserved_stages||[];
+  const parts=['排队：'+secondsText(task.queue_time),'估高'+(retained.includes('height')?'（先前完成）':'')+'：'+secondsText(task.height_duration??task.inference_time)];
+  if(task.clothing_duration!==undefined)parts.push('着装'+(retained.includes('clothing')?'（先前完成）':'')+'：'+secondsText(task.clothing_duration));
+  if(task.body_duration!==undefined)parts.push('人体'+(retained.includes('body')?'（先前完成）':'')+'：'+secondsText(task.body_duration));
+  if(task.timing_scope==='resumed_stages'){
+    parts.push('本次接续（不含排队）：'+secondsText(task.end_to_end_time)+'；不代表首次完整耗时');
+  }else if(task.display_time_note||task.timing_scope==='interrupted'){
     const note=(task.display_time_note||'任务运行中断；完整连续耗时不可得').replace(/(\d+(?:\.\d+)?)\s*ms\b/gi,(_,n)=>(Number(n)/1000).toFixed(3)+' 秒').replace(/(\d+(?:\.\d+)?)\s*s\b/gi,'$1 秒');
     parts.push('完整连续任务：未提供；分段不相加。'+note);
   }else if(task.timing_scope==='continuous')parts.push('完整任务（不含排队）：'+secondsText(task.end_to_end_time));
@@ -151,6 +154,7 @@ function renderTask(task){
   const identity=task.task_id==='historical_case_not_distributed'?'历史示例 · 原图':task.task_id==='historical_case_not_distributed'?'历史示例 · 人工遮挡':'当前任务';if($('taskIdentity'))$('taskIdentity').textContent=identity;
   currentTask=task;
   renderTargetSelection(task);
+  renderResume(task);
   const terminal=task.status==='completed'||task.status==='failed',state=taskState(task);
   document.body.classList.toggle('is-complete',terminal);
   if(terminal)document.body.classList.remove('editing-input');
@@ -203,7 +207,7 @@ async function followTask(taskId){
     if(!response.ok)throw new Error('状态查询失败：'+response.status);
     const task=await response.json();
     if(generation!==followGeneration)return;
-    const taskKey=task.task_id+'|'+(task.attempt||1); if(activeViewerTaskKey!==taskKey){clearAllModels('正在读取本任务模型…');viewerLoadKeys.clothing=null;viewerLoadKeys.body=null;activeViewerTaskKey=taskKey;}
+    const taskKey=task.task_id; if(activeViewerTaskKey!==taskKey){clearAllModels('正在读取本任务模型…');viewerLoadKeys.clothing=null;viewerLoadKeys.body=null;activeViewerTaskKey=taskKey;}
     currentTask=task;startedAt=task.submitted_at==null?startedAt:Number(task.submitted_at)*1000;
 
     if(task.stage!==lastStage){lastStage=task.stage;log(task.stage||'推理中')}
