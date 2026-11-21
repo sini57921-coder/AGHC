@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+from econ_paths import current_econ
 
 BASE = Path(__file__).resolve().parent
 ECON = Path(str(config_path('econ_source')))
@@ -47,7 +48,7 @@ def build(task, clothing):
     if source is not None:
         econ = source.parent.parent.parent
     else:
-        econ = BASE / 'runs' / digest / 'econ'
+        econ = Path(task['econ_output']) if task.get('econ_output') else current_econ(BASE / 'runs' / digest)
         source = econ / 'output/econ-windows-lowmem/obj'
     parameter = source / f'{sample}_smpl_00.npy'
     original = source / f'{sample}_smpl_00.obj'

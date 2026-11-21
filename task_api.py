@@ -5,6 +5,9 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from fastapi import Body
+from target_selection import candidates_for, prepare_target
+from econ_paths import current_econ
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from ai_adapter import run_ai
@@ -26,6 +29,7 @@ guard = threading.Lock()
 
 def result_state(task):
     hs, cs, bs = (task.get(k) for k in ("height_status", "clothing_status", "body_status"))
+    if task.get("status") == "awaiting_target": return "awaiting_target"
     if task.get("status") == "queued": return "waiting"
     if task.get("status") == "running": return "partial" if hs == "ok" else "running"
     if hs == "failed": return "failed"
@@ -35,13 +39,14 @@ def result_state(task):
 
 
 def stage(task):
+    if task.get("status") == "awaiting_target": return "请点击编号框确认目标人物"
     rs = result_state(task)
     if rs == "waiting": return "等待任务执行"
     if task.get("height_status") in ("queued", "running"):
         digest = task.get("run_key") or task.get("image_sha256", "")[:16]
         sample = "upload_" + digest
         root = BASE / "runs"
-        stages = [("人物检测", root / f"{sample}_detector/results.json"), ("相机视场", root / f"{sample}_fov/completion.json"), ("人体模型", root / f"{sample}_body/completion.json"), ("反射体形特征", root / f"{sample}_reflection/features.json"), ("人脸特征", root / digest / "face/features.json"), ("ECON体形恢复", root / digest / "econ" / sample / "canonical/canonical_apose.json")]
+        stages = [("人物检测", root / f"{sample}_detector/results.json"), ("相机视场", root / f"{sample}_fov/completion.json"), ("人体模型", root / f"{sample}_body/completion.json"), ("反射体形特征", root / f"{sample}_reflection/features.json"), ("人脸特征", root / digest / "face/features.json"), ("ECON体形恢复", current_econ(root / digest) / sample / "canonical/canonical_apose.json")]
         for name, path in stages:
             if not path.exists(): return name + "处理中"
         return "前端特征完成，正在执行35维预测"
@@ -110,6 +115,15 @@ def worker():
             result = run_ai(task["image_path"], run_key=task.get("run_key"), force_fresh=task.get("force_fresh", False))
         except Exception as error:
             result = {"status": "failed", "height_cm": None, "failure_reason": f"{type(error).__name__}: {error}", "inference_time": round(time.time() - task["started_at"], 3)}
+        if result.get("status") == "failed" and "person_binding_ambiguous" in (result.get("failure_reason") or ""):
+            choices = candidates_for(task, BASE)
+            if choices:
+                with guard:
+                    task.update(status="awaiting_target", height_status="awaiting_target", target_candidates=choices,
+                                clothing_status="queued", body_status="queued", failure_reason=None)
+                    save(task)
+                pending.task_done()
+                continue
         with guard:
             task.update({k:v for k,v in result.items() if k != "status"})
             task["height_status"] = result["status"]
@@ -176,7 +190,8 @@ def task_result(task_id: str):
     with guard:
         task=records.get(task_id)
         if task is None: raise HTTPException(404,"任务不存在")
-        return {**task,"result_state":result_state(task),"stage":stage(task)}
+        choices = candidates_for(task, BASE) if task.get("status") in ("failed", "awaiting_target") else []
+        return {**task,"target_candidates":choices,"result_state":result_state(task),"stage":stage(task)}
 
 @app.post("/api/tasks/{task_id}/resume")
 def resume_task(task_id: str):
@@ -188,7 +203,7 @@ def resume_task(task_id: str):
         if task.get("status") not in ("failed","completed") or result_state(task) not in ("failed","partial"):
             raise HTTPException(409,"仅能接续终态失败或部分失败的任务")
         history=task.get("attempt_history",[]); old={k:v for k,v in task.items() if k not in ("attempt_history",)}; history.append(old)
-        identity={k:task[k] for k in ("task_id","image_path","image_url","image_sha256","submitted_at","method_version","run_key","force_fresh","original_image_path","original_filename","original_sha256","input_record_path","input_processing") if k in task}
+        identity={k:task[k] for k in ("task_id","image_path","image_url","image_sha256","submitted_at","method_version","run_key","force_fresh","original_image_path","original_filename","original_sha256","input_record_path","input_processing","target_selection","evaluation_scope") if k in task}
         for key in list(task): task.pop(key)
         task.update(identity, attempt=old.get("attempt",1)+1, attempt_history=history, submitted_at=time.time(), status="queued",result_state="waiting",height_cm=None,height_status="queued",clothing_status="queued",body_status="queued",failure_reason=None,clothing_failure_reason=None,body_failure_reason=None,obj_url=None,obj_role=None,body_canonical_url=None,body_original_url=None,inference_time=None,end_to_end_time=None,queue_time=None,height_duration=None,clothing_duration=None,body_duration=None,height_started_at=None,height_finished_at=None,clothing_started_at=None,clothing_finished_at=None,body_started_at=None,body_finished_at=None,started_at=None,finished_at=None,feature_source=None,source=None,stage="等待任务执行")
         records[task_id]=task; save(task)
@@ -204,3 +219,28 @@ def health(): return {"status":"ok","model":"frozen35_full112_clear_only"}
 
 
 
+
+@app.post("/api/tasks/{task_id}/target")
+def select_target(task_id: str, payload: dict = Body(...)):
+    with guard:
+        source = records.get(task_id)
+        if source is None: raise HTTPException(404, "任务不存在")
+        selection_file = BASE / "runs" / "uploads" / task_id / "selected_target_task.json"
+        if selection_file.exists():
+            return json.loads(selection_file.read_text(encoding="utf-8"))
+        if source.get("selected_target_task_id"):
+            raise HTTPException(409, "本任务已确认目标，请打开对应的新任务")
+        if source.get("status") not in ("awaiting_target", "failed"):
+            raise HTTPException(409, "当前任务不等待目标选择")
+        choices = candidates_for(source, BASE)
+        index = payload.get("index")
+        if type(index) is not int or index < 0 or index >= len(choices):
+            raise HTTPException(400, "请选择有效编号")
+        new = prepare_target(source, choices[index], index, BASE)
+        records[new["task_id"]] = new
+        save(new)
+        selection_file.parent.mkdir(parents=True, exist_ok=True)
+        selection_file.write_text(json.dumps({"task_id":new["task_id"],"status":"queued"}),encoding="utf-8")
+        # Preserve original evaluation task files; selection lives in the child record.
+    pending.put(new["task_id"])
+    return {"task_id":new["task_id"], "status":"queued"}

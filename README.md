@@ -1,13 +1,13 @@
 # AGHC：单张RGB身高估计与个体人体展示
 
-本仓库公开AGHC项目的网页、异步任务管理、输入规范化、35维特征定义与冻结算法衔接代码，基于Windows本机原型 `local_fullflow_20261119_r2`。自有代码按MIT发布；第三方内容保留原许可，详见[许可范围](LICENSE_STATUS.md)。
+本仓库公开AGHC项目的网页、异步任务管理、输入规范化、35维特征定义与冻结算法衔接代码，基于Windows本机原型 `local_fullflow_20261119_r2`，本次自有集成代码更新至 `target_recovery_20261121`。自有代码按MIT发布；第三方内容保留原许可，详见[许可范围](LICENSE_STATUS.md)。
 
 **这不是可独立安装的完整推理包。** 仓库不含第三方模型/权重、ECON派生推理入口、未完成权属确认的衔接工具、人物素材、日志、凭据或冻结回归配置。不宣称完整复现、在线推理已上线或精度达标。
 
 ## 公开内容
 
 - `static/`：单图工作台、同任务双模型查看器、照片预览与结果摘要导出；不附带历史人物案例。
-- `task_api.py`、`input_image.py`：串行任务、分阶段状态、解码、EXIF方向纠正、统一RGB输入与缓存身份。
+- `task_api.py`、`input_image.py`、`target_selection.py`：串行任务、分阶段状态、解码、EXIF方向纠正、统一RGB输入与缓存身份。
 - `frozen35_single.py`、`ai_adapter.py`：同图35维构造、缺脸处理、标准化和冻结回归调用；顺序见[特征定义](config/feature_schema.json)。
 - `clothed_task.py`、`body_mesh_task.py`等：读取同任务个体参数与ECON产物，组织原姿态着装和规范A姿态人体展示。等比展示缩放不证明厘米准确或隐藏形体真实。
 - `environments/`：实际三个Python环境的版本参照，不是经过独立重建验证的安装锁文件。
@@ -42,3 +42,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./start_local.ps1
 ## 验证与许可边界
 
 发布副本只做过配置、轻量导入、语法及引用检查，没有独立安装或完整推理验收。自有代码采用[MIT](LICENSE)，Three.js与OBJLoader保留原MIT声明。ECON、CameraHMR、SMPL-X、PIXIE及相关数据/模型不因本仓库MIT而获得再分发或商业使用授权。
+
+## 2026-11-21 集成更新
+
+- 人物歧义时暂停并显示编号框，用户点击确认后才创建选定目标的子任务；单人流程不增加人工步骤，不默认选择最大框。目标裁剪不改变比例，记录原图坐标映射及选择身份，CameraHMR、人脸与ECON使用同一裁剪。不同目标不共用阶段缓存。
+- `econ_failure.py`保留ECON日志中的实际异常；启动失败也从本次命令日志提取原因，避免被后续参数文件缺失覆盖。
+- `econ_paths.py`为恢复创建独立`econ_attempt_XX`输出，并通过`econ_attempt.json`记录当前目录。参数读取、模型生成和任务阶段查询跟随同一目录，保留旧日志与失败记录。恢复不改变权重、35维定义或拟合配置。
+- `cache_manifest`、`cache_features`、`cache_detector_results`是可选的历史缓存路径，默认空值；不完整或不存在时执行新图流程。无需原研究目录，但仍需要下面所列的外部运行组件和私有回归配置。
+
+本机已验证选人后双模型输出与独立目录恢复；这是工程能力记录，不是新的精度或全自动成功率结论。公开副本只验证配置和CPU替身接线，**尚未完成独立安装或完整推理验收**。
+
+```powershell
+& '<服务Python路径>' ./validate_release.py
+& '<服务Python路径>' ./validate_target_recovery.py
+```
+
+两条检查均不加载模型、不运行GPU。第二条只使用临时目录、合成图片和子进程替身，覆盖可选缓存缺失、目标身份隔离、恢复目录及首错传递。

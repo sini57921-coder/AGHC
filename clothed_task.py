@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+from econ_paths import current_econ
 
 
 BASE = Path(__file__).resolve().parent
@@ -38,7 +39,7 @@ def build(task: dict) -> dict:
     digest = task.get("run_key") or task["image_sha256"][:16]
     sample = "upload_" + digest
     run = BASE / "runs" / digest
-    source = run / "econ"
+    source = Path(task["econ_output"]) if task.get("econ_output") else current_econ(run)
     mesh = source / "output" / "econ-windows-lowmem" / "obj" / f"{sample}_0_full.obj"
     if not mesh.is_file():
         protocol = source / "protocol.json"

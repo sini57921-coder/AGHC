@@ -1,4 +1,4 @@
-from release_config import path as config_path
+from release_config import path as config_path, optional_path
 import hashlib
 import json
 import os
@@ -7,13 +7,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from econ_failure import first_econ_error
+from econ_paths import current_econ, new_econ_attempt
 
-ROOT = Path(str(config_path('research_root')))
 HERE = Path(__file__).resolve().parent
-HMR = ROOT / "AGHC_CameraHMR"
+HMR = config_path("camera_assets")
 FIT = config_path("frozen_fit")
-MANIFEST = config_path("cache_manifest")
-FEATURES = config_path("cache_features")
+MANIFEST = optional_path("cache_manifest")
+FEATURES = optional_path("cache_features")
+CACHE_DETECTOR = optional_path("cache_detector_results")
 PY_HMR = config_path("python_service")
 PY_FACE = config_path("python_face")
 PY_ECON = Path(str(config_path('python_econ')))
@@ -53,16 +55,16 @@ def bound_person(detection, work):
 
 
 def feature_for(image, digest, work, force_fresh=False):
-    manifest = [] if force_fresh or not MANIFEST.is_file() else json.loads(MANIFEST.read_text(encoding="utf-8"))["samples"]
-    known = next((r for r in manifest if r["source_sha256"] == digest), None)
+    cache_ready = not force_fresh and all(path is not None and path.is_file() for path in (MANIFEST, FEATURES, CACHE_DETECTOR))
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))["samples"] if cache_ready else []
+    known = next((row for row in manifest if row["source_sha256"] == digest), None)
     if known:
-        detector_path = HMR / "baracca5_detector_20261101_v2/results.json"
-        detector = next((r for r in json.loads(detector_path.read_text(encoding="utf-8"))
-                         if r["sample_id"] == known["sample_id"]), None)
+        detector = next((row for row in json.loads(CACHE_DETECTOR.read_text(encoding="utf-8"))
+                         if row["sample_id"] == known["sample_id"]), None)
         if detector is None or detector["person_candidates"] != 1:
             raise ValueError("person_binding_ambiguous")
-        row = next((r for r in json.loads(FEATURES.read_text(encoding="utf-8"))
-                    if r["sample_id"] == known["sample_id"]), None)
+        row = next((row for row in json.loads(FEATURES.read_text(encoding="utf-8"))
+                    if row["sample_id"] == known["sample_id"]), None)
         if row and "body28" in row:
             return row["body28"], row["ratios"], "same_image_cache"
 
@@ -78,7 +80,11 @@ def feature_for(image, digest, work, force_fresh=False):
             result = subprocess.run([str(x) for x in command], stdout=stream, stderr=subprocess.STDOUT,
                                     env={**os.environ, "PYTHONUTF8": "1", "PYTHONPATH": str(ORIGINAL_TOOLS) + os.pathsep + os.environ.get("PYTHONPATH", "")})
         if result.returncode:
-            raise RuntimeError(f"frontend exit {result.returncode}; see {log}")
+            text = log.read_text(encoding="utf-8", errors="replace").rsplit("COMMAND ", 1)[-1]
+            errors = [line.strip() for line in text.splitlines()
+                      if any(token in line for token in ("Error:", "Exception:", "fatal   :"))]
+            cause = errors[-1] if errors else f"frontend exit {result.returncode}"
+            raise RuntimeError(f"{cause}; see {log}")
     detector, fov, body, reflection = [sample + suffix for suffix in
         ("_detector", "_fov", "_body", "_reflection")]
     common = ["--manifest", manifest_path, "--expected-inputs", "1"]
@@ -100,11 +106,14 @@ def feature_for(image, digest, work, force_fresh=False):
     if not (face_dir / "features.json").exists():
         run([PY_FACE, ORIGINAL_TOOLS / "extract_baracca5_face.py", "--manifest", manifest_path,
              "--detector", HERE / "runs" / detector_results, "--output", face_dir])
-    econ = work / "econ"
+    econ = current_econ(work)
     if not (econ / sample / "canonical/canonical_apose.json").exists():
+        econ = new_econ_attempt(work)
         run([PY_ECON, HERE / "run_clothed_single.py", manifest_path, econ])
     canonical = econ / sample / "canonical/canonical_apose.json"
     parameter = econ / sample / "output/econ-windows-lowmem/obj" / (sample + "_smpl_00.npy")
+    if not parameter.is_file() or not canonical.is_file():
+        raise RuntimeError(first_econ_error(econ))
     import torch
     beta = np.asarray(np.load(parameter, allow_pickle=True).item()["betas"].detach().cpu()).reshape(-1)[:10]
     hmr = json.loads((HERE / "runs" / reflection / "features.json").read_text(encoding="utf-8"))[0]
@@ -129,7 +138,7 @@ def predict_image(image_path, run_key=None, force_fresh=False):
     if values.shape != (35,) or not np.isfinite(height):
         raise ValueError("invalid_frozen35_output")
     result = {"height_cm": height, "method_version": VERSION, "source": source, "image_sha256": digest,
-              "run_key": work.name, "force_fresh": force_fresh}
+              "run_key": work.name, "force_fresh": force_fresh, "econ_output": str(current_econ(work))}
     (work / "direct_prediction.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result
 

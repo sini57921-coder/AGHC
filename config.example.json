@@ -1,5 +1,5 @@
 {
-  "version": "local_fullflow_20261119_r2_source_candidate",
+  "version": "local_fullflow_20261119_r2_target_recovery_20261121",
   "paths": {
     "python_service": "../external/envs/camera/Scripts/python.exe",
     "python_face": "../external/envs/face/python.exe",
@@ -9,7 +9,6 @@
     "legacy_project": "../external/project",
     "legacy_aghc": "../external/AGHC",
     "legacy_tools": "../external/AGHC/tools",
-    "research_root": "../external/project_resources",
     "camera_tools": "../external/integration_tools",
     "econ_staged_entry": "../external/authorized_r2/staged_infer.py",
     "econ_config": "../external/ECON/configs/econ-windows-lowmem.yaml",
@@ -18,7 +17,8 @@
     "torch_cache": "../external/ICON/data/torch_cache",
     "vsdevcmd": "../external/VisualStudio/Common7/Tools/VsDevCmd.bat",
     "frozen_fit": "../private_assets/frozen35_fit.json",
-    "cache_manifest": "../private_assets/optional_cache/manifest.json",
-    "cache_features": "../private_assets/optional_cache/features.json"
+    "cache_manifest": null,
+    "cache_features": null,
+    "cache_detector_results": null
   }
 }

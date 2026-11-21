@@ -150,6 +150,7 @@ function formatTaskDurations(task){
 function renderTask(task){
   const identity=task.task_id==='historical_case_not_distributed'?'历史示例 · 原图':task.task_id==='historical_case_not_distributed'?'历史示例 · 人工遮挡':'当前任务';if($('taskIdentity'))$('taskIdentity').textContent=identity;
   currentTask=task;
+  renderTargetSelection(task);
   const terminal=task.status==='completed'||task.status==='failed',state=taskState(task);
   document.body.classList.toggle('is-complete',terminal);
   if(terminal)document.body.classList.remove('editing-input');
@@ -206,7 +207,7 @@ async function followTask(taskId){
     currentTask=task;startedAt=task.submitted_at==null?startedAt:Number(task.submitted_at)*1000;
 
     if(task.stage!==lastStage){lastStage=task.stage;log(task.stage||'推理中')}
-    if(task.status==='completed'||task.status==='failed'){ 
+    if(task.status==='completed'||task.status==='failed'||task.status==='awaiting_target'){
       renderData(task);
       log(task.height_status==='ok'&&task.clothing_status==='failed'?'身高预测完成；着装重建失败：'+(task.clothing_failure_reason||'未提供原因'):task.status==='completed'?'任务完成。':'任务失败：'+(task.failure_reason||'未提供原因'),task.status==='failed'||task.clothing_status==='failed'?'err':'ok');
       return task;
