@@ -1,0 +1,10 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+(async()=>{
+ const elements={cancelTask:{},cancelNote:{},reconnect:{}},requests=[];let release;
+ const context={document:{getElementById:id=>elements[id]},currentTask:{task_id:'synthetic',cancel_allowed:true},fetch:async(url,opt)=>{requests.push([url,opt.method]);await new Promise(r=>release=r);return {ok:true,json:async()=>({message:'已取消排队'})};},followTask:async()=>{context.currentTask={task_id:'synthetic',status:'cancelled',cancel_allowed:false};},log:()=>{},connectionError:()=>{}};vm.createContext(context);vm.runInContext(fs.readFileSync('static/task_cancel.js','utf8'),context);
+ const a=vm.runInContext('cancelQueuedTask()',context),b=vm.runInContext('cancelQueuedTask()',context);await new Promise(r=>setImmediate(r));assert.equal(requests.length,1);release();await Promise.all([a,b]);assert.equal(elements.cancelTask.hidden,true);
+ const source=fs.readFileSync('static/dual_view.js','utf8'),start=source.indexOf('async function followTask('),end=source.indexOf('const savedTask=',start);let queries=0,timers=0,busy=null,rendered;
+ Object.assign(context,{API:'',startedAt:null,followGeneration:0,activeViewerTaskKey:null,viewerLoadKeys:{},history:{replaceState:()=>{}},location:{pathname:'/',hash:''},localStorage:{setItem:()=>{}},$:id=>elements[id]||(elements[id]={}),clearAllModels:()=>{},renderData:t=>rendered=t,renderProgress:()=>{},setBusy:b=>busy=b,setTimeout:()=>timers++,fetch:async()=>{queries++;return {ok:true,json:async()=>({task_id:'synthetic',status:'cancelled',stage:'已取消排队'})};}});
+ vm.runInContext(source.slice(start,end),context);await vm.runInContext('followTask("synthetic")',context);assert.equal(queries,1);assert.equal(timers,0);assert.equal(busy,false);assert.equal(rendered.status,'cancelled');
+ console.log(JSON.stringify({double_click_one_request:true,cancelled_stops_polling:true,photo_controls_restored:true,refresh_reads_cancelled:true,gpu_runs:0}));
+})().catch(e=>{console.error(e);process.exitCode=1;});

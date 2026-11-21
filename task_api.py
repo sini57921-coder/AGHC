@@ -30,6 +30,7 @@ guard = threading.Lock()
 
 def result_state(task):
     hs, cs, bs = (task.get(k) for k in ("height_status", "clothing_status", "body_status"))
+    if task.get("status") == "cancelled": return "cancelled"
     if task.get("status") == "awaiting_target": return "awaiting_target"
     if task.get("status") == "queued": return "waiting"
     if task.get("status") == "running": return "partial" if hs == "ok" else "running"
@@ -40,6 +41,7 @@ def result_state(task):
 
 
 def stage(task):
+    if task.get("status") == "cancelled": return "已取消排队，未执行本次推理"
     if task.get("status") == "awaiting_target": return "请点击编号框确认目标人物"
     rs = result_state(task)
     if rs == "waiting": return "等待任务执行"
@@ -109,6 +111,7 @@ for task_file in TASKS.glob("*.json"):
 
 def process_task(task):
     with guard:
+        if task.get("status") != "queued": return
         task.update(status="running", started_at=time.time())
         task["queue_time"] = round(task["started_at"] - task["submitted_at"], 3) if task.get("submitted_at") else None
         save(task)
@@ -200,7 +203,7 @@ def task_result(task_id: str):
         task=records.get(task_id)
         if task is None: raise HTTPException(404,"任务不存在")
         choices = candidates_for(task, BASE) if task.get("status") in ("failed", "awaiting_target") else []
-        return {**task,"resume_allowed":resume_allowed(task),"target_candidates":choices,"result_state":result_state(task),"stage":stage(task)}
+        return {**task,"resume_allowed":resume_allowed(task),"cancel_allowed":task.get("status")=="queued","target_candidates":choices,"result_state":result_state(task),"stage":stage(task)}
 
 @app.post("/api/tasks/{task_id}/resume")
 def resume_task(task_id: str):
@@ -248,3 +251,23 @@ def select_target(task_id: str, payload: dict = Body(...)):
         # Preserve original evaluation task files; selection lives in the child record.
     pending.put(new["task_id"])
     return {"task_id":new["task_id"], "status":"queued"}
+
+@app.post("/api/tasks/{task_id}/cancel")
+def cancel_task(task_id: str):
+    with guard:
+        task=records.get(task_id)
+        if task is None: raise HTTPException(404,"任务不存在")
+        if task.get("status")=="cancelled":
+            return {"task_id":task_id,"status":"cancelled","message":"任务已取消"}
+        if task.get("status")!="queued":
+            message="任务已开始，未取消" if task.get("status")=="running" else "任务不在排队中，未取消"
+            raise HTTPException(409,{"message":message,"status":task.get("status")})
+        task.update(status="cancelled",cancelled_at=time.time(),failure_reason=None,
+                    timing_scope="cancelled_before_execution",end_to_end_time=None,
+                    display_time_note="任务在开始前取消，未产生本次推理耗时")
+        task["finished_at"]=task["cancelled_at"]
+        task["queue_time"]=round(task["cancelled_at"]-task["submitted_at"],3) if task.get("submitted_at") else None
+        for stage_name in ("height","clothing","body"):
+            if task.get(stage_name+"_status")=="queued":task[stage_name+"_status"]="cancelled"
+        save(task)
+        return {"task_id":task_id,"status":"cancelled","message":"已取消排队"}

@@ -124,8 +124,9 @@ function loadTaskViewer(kind,task){
   $(kind+'State').textContent=statusText(status);
 }
 function setTaskDot(mode){const element=$('serviceDot');element.classList.remove('offline','error','pending','warning');if(mode&&mode!=='ok')element.classList.add(mode)}
-function statusText(status){return {ok:'成功',failed:'失败',skipped:'未运行',queued:'等待',running:'运行中'}[status]||'未记录'}
+function statusText(status){return {cancelled:'已取消',ok:'成功',failed:'失败',skipped:'未运行',queued:'等待',running:'运行中'}[status]||'未记录'}
 function taskState(task){
+  if(task.status==='cancelled')return 'cancelled';
   if(task.status==='queued')return 'waiting';
   if(task.height_status==='failed')return 'failed';
   if(task.status==='running')return task.height_status==='ok'?'partial':'running';
@@ -141,7 +142,9 @@ function formatTaskDurations(task){
   const parts=['排队：'+secondsText(task.queue_time),'估高'+(retained.includes('height')?'（先前完成）':'')+'：'+secondsText(task.height_duration??task.inference_time)];
   if(task.clothing_duration!==undefined)parts.push('着装'+(retained.includes('clothing')?'（先前完成）':'')+'：'+secondsText(task.clothing_duration));
   if(task.body_duration!==undefined)parts.push('人体'+(retained.includes('body')?'（先前完成）':'')+'：'+secondsText(task.body_duration));
-  if(task.timing_scope==='resumed_stages'){
+  if(task.timing_scope==='cancelled_before_execution'){
+    parts.push('本次排队已取消，未执行推理；保留阶段若有耗时均来自此前记录');
+  }else if(task.timing_scope==='resumed_stages'){
     parts.push('本次接续（不含排队）：'+secondsText(task.end_to_end_time)+'；不代表首次完整耗时');
   }else if(task.display_time_note||task.timing_scope==='interrupted'){
     const note=(task.display_time_note||'任务运行中断；完整连续耗时不可得').replace(/(\d+(?:\.\d+)?)\s*ms\b/gi,(_,n)=>(Number(n)/1000).toFixed(3)+' 秒').replace(/(\d+(?:\.\d+)?)\s*s\b/gi,'$1 秒');
@@ -155,7 +158,8 @@ function renderTask(task){
   currentTask=task;
   renderTargetSelection(task);
   renderResume(task);
-  const terminal=task.status==='completed'||task.status==='failed',state=taskState(task);
+  renderCancel(task);
+  const terminal=task.status==='completed'||task.status==='failed'||task.status==='cancelled',state=taskState(task);
   document.body.classList.toggle('is-complete',terminal);
   if(terminal)document.body.classList.remove('editing-input');
   $('taskId').textContent=task.task_id||'—';$('stageText').textContent=task.stage||({waiting:'等待执行',running:'处理中',partial:'部分完成',completed:'已完成',failed:'失败'}[state]);$('exportSummary').disabled=false;
@@ -163,8 +167,8 @@ function renderTask(task){
   const height=task.height_cm==null?NaN:Number(task.height_cm),heightOK=Number.isFinite(height)&&task.height_status==='ok';
   setResult(heightOK?height:null,state,formatTaskDurations(task));
   updateCaseContext(task);
-  $('backendStatus').textContent={waiting:'等待',running:'运行中',partial:terminal?'部分完成 · 含失败':'部分完成 · 继续处理中',completed:'完成',failed:'失败'}[state];
-  $('resultHint').textContent=terminal?(state==='completed'?'身高、人体与着装均已完成':state==='partial'?'可用结果已保留，请查看各侧原因':'没有有效身高，请查看失败原因'):(state==='partial'?'身高已完成，模型阶段继续运行':'请查看当前阶段，页面可刷新恢复');
+  $('backendStatus').textContent={cancelled:'已取消',waiting:'等待',running:'运行中',partial:terminal?'部分完成 · 含失败':'部分完成 · 继续处理中',completed:'完成',failed:'失败'}[state];
+  $('resultHint').textContent=state==='cancelled'?'已取消排队，可更换照片；本次未执行推理。':terminal?(state==='completed'?'身高、人体与着装均已完成':state==='partial'?'可用结果已保留，请查看各侧原因':'没有有效身高，请查看失败原因'):(state==='partial'?'身高已完成，模型阶段继续运行':'请查看当前阶段，页面可刷新恢复');
   setTaskDot(state==='failed'?'error':state==='partial'?'warning':state==='completed'?'ok':'pending');
   const lines=['身高：'+statusText(task.height_status),'着装：'+statusText(task.clothing_status),'人体：'+statusText(task.body_status),'特征来源：'+featureSourceText(task)];
   for(const [label,key] of [['着装','clothing'],['人体','body']])if(task[key+'_failure_reason'])lines.push(label+'原因：'+task[key+'_failure_reason']);
@@ -211,8 +215,9 @@ async function followTask(taskId){
     currentTask=task;startedAt=task.submitted_at==null?startedAt:Number(task.submitted_at)*1000;
 
     if(task.stage!==lastStage){lastStage=task.stage;log(task.stage||'推理中')}
-    if(task.status==='completed'||task.status==='failed'||task.status==='awaiting_target'){
+    if(task.status==='completed'||task.status==='failed'||task.status==='cancelled'||task.status==='awaiting_target'){
       renderData(task);
+      if(task.status==='cancelled'){setBusy(false);log('已取消排队；输入和任务记录已保留。','ok');return task;}
       log(task.height_status==='ok'&&task.clothing_status==='failed'?'身高预测完成；着装重建失败：'+(task.clothing_failure_reason||'未提供原因'):task.status==='completed'?'任务完成。':'任务失败：'+(task.failure_reason||'未提供原因'),task.status==='failed'||task.clothing_status==='failed'?'err':'ok');
       return task;
     }
