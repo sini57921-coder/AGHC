@@ -1,72 +1,36 @@
-# AGHC：单张RGB身高估计与个体人体展示
+# AGHC
 
-本仓库公开AGHC项目的网页、异步任务管理、输入规范化、35维特征定义与冻结算法衔接代码，基于Windows本机原型 `local_fullflow_20261119_r2`，本次自有集成代码更新至 `target_recovery_20261121`。自有代码按MIT发布；第三方内容保留原许可，详见[许可范围](LICENSE_STATUS.md)。
+AGHC 是单张 RGB 身高估计与个体人体展示的研究原型。本仓库提供自有网页工作台、异步任务接口、输入规范化、人物选择、35 维特征衔接，以及同图人体和着装结果的组织代码。
 
-**这不是可独立安装的完整推理包。** 仓库不含第三方模型/权重、ECON派生推理入口、未完成权属确认的衔接工具、人物素材、日志、凭据或冻结回归配置。不宣称完整复现、在线推理已上线或精度达标。
+## 功能
 
-## 公开内容
+- 上传图片并查看真实阶段、预测身高和失败原因。
+- 多人检测歧义时由用户选择目标，不同目标分别保存结果。
+- 并列查看本任务规范 A 姿态人体与原姿态着装重建。
+- 接续允许恢复的失败任务，取消尚未执行的排队任务。
 
-- `static/`：单图工作台、同任务双模型查看器、照片预览与结果摘要导出；不附带历史人物案例。
-- `task_api.py`、`input_image.py`、`target_selection.py`：串行任务、分阶段状态、解码、EXIF方向纠正、统一RGB输入与缓存身份。
-- `frozen35_single.py`、`ai_adapter.py`：同图35维构造、缺脸处理、标准化和冻结回归调用；顺序见[特征定义](config/feature_schema.json)。
-- `clothed_task.py`、`body_mesh_task.py`、`generate_individual_body.py`：读取同任务个体参数与ECON产物，组织原姿态着装和规范A姿态人体生成。该入口可独立导入；实际生成时从配置的 `econ_source` 加载ECON随附的SMPL-X运行代码，并从 `smpl_models` 读取授权模型文件。等比展示缩放不证明厘米准确或隐藏形体真实。
-- `environments/`：实际三个Python环境的版本参照，不是经过独立重建验证的安装锁文件。
+## 主要入口
 
-## 外部条件与启动
+| 文件 | 用途 |
+|---|---|
+| `main.py`、`task_api.py` | 本机 API、串行任务 |
+| `input_image.py`、`target_selection.py` | 图片规范化、目标选择 |
+| `frozen35_single.py`、`ai_adapter.py` | 冻结 35 维估高衔接 |
+| `body_mesh_task.py`、`clothed_task.py` | 同任务人体与着装结果 |
+| `static/index.html` | 网页工作台 |
 
-1. 准备Windows及记录中的服务/CameraHMR、ECON、人脸三个Python环境，不合并、不自动升级。版本见[依赖记录](environments/README.md)。CUDA、Visual Studio与模型资产须另行准备。
-2. 按原许可从官方取得[CameraHMR](https://github.com/pixelite1201/CameraHMR)、[ECON](https://github.com/YuliangXiu/ECON)、SMPL-X等依赖。固定版本、文件名和放置方法见[外部依赖表](EXTERNAL_DEPENDENCIES.csv)。
-3. 规范人体生成入口已随本仓库提供，但依赖上一步配置的ECON/SMPL-X代码与模型资产。完整单图运行仍需要合法提供的r2 ECON派生入口及配套修改、三个CameraHMR单图衔接工具、AGHC helper和其canonical CLI。**这些集成组件目前没有已确认的公开获取入口；安装默认官方仓库不能代替。** 本仓库不包含或替代它们。
-4. 冻结回归配置暂留内部。必须具备训练时的标准化、缺脸插补参数、35维回归系数与截距；仅有特征定义不能复现厘米预测。不得用重新拟合或其他模型替代。
-5. 取得上述条件后，复制 `config.example.json` 为不入库的 `config.local.json` 并填写路径，相对路径以配置文件目录为基准。
+35 维字段见 [特征定义](config/feature_schema.json)。本机启动入口为 `start_local.ps1`，路径配置示例为 `config.example.json`。
 
-```powershell
-$env:AGHC_CONFIG = (Resolve-Path './config.local.json').Path
-& '<服务Python路径>' ./release_config.py
-powershell -NoProfile -ExecutionPolicy Bypass -File ./start_local.ps1
-```
+## 运行条件
 
-打开 `http://127.0.0.1:8000/static/index.html`。只绑定本机回环，API没有公网身份隔离，不能直接公开8000。按Ctrl+C停止。运行后的任务、转换记录和日志留在本地 `runs/`；失败保留分项原因，不加载其他任务模型替代。
+代码面向 Windows 本机环境，使用独立的 CameraHMR、ECON 和人脸 Python 环境。外部依赖的来源与版本见 [依赖清单](EXTERNAL_DEPENDENCIES.csv) 和 [环境说明](environments/README.md)。
 
-## 工作目标与已有结果
+完整厘米推理还需要未随仓库发布的冻结回归配置（插补、标准化、系数和截距）及部分 ECON、CameraHMR 集成组件。**本仓库不能单独运行完整推理。** 具备相应组件后，填写 `config.local.json`，设置 `AGHC_CONFIG`，运行 `start_local.ps1`，在本机打开 `http://127.0.0.1:8000/static/index.html`。服务只绑定本机回环地址。
 
-10 cm是当前工作目标表述，**不是学校已经确认的验收标准**；原申请存在3 cm与10 cm口径差异。以下均为开发评估，不同来源和遮挡协议不能合并为独立泛化成绩：
+## 已有结果
 
-| 开发来源 | 原图MAE | 人工遮挡MAE |
-|---|---:|---:|
-| MTP82 | 7.3413 cm | 7.2998 cm |
-| BARACCA30 | 4.9802 cm | 局部躯干4.9079 cm；单侧部分腿部5.0334 cm |
+冻结 35 维读出在 MTP82 人物留一原图上的 MAE 为 7.34 cm，在 BARACCA30 人物五折原图上的 MAE 为 4.98 cm。这些是开发评估，不能合并为同一数据集成绩。局部遮挡下尚无稳定的精度增益；展示网格按预测身高等比缩放，不构成额外精度验证。
 
-尚未证明稳定的局部遮挡精度增益，未达到3 cm或2秒目标。一次本机完整处理为361.317秒，不含排队0.086秒；它不是平均耗时或性能保证。人物数据和逐人预测不随源码公开。
+## 许可
 
-## 验证与许可边界
-
-发布副本只做过配置、轻量导入、语法及引用检查，没有独立安装或完整推理验收。自有代码采用[MIT](LICENSE)，Three.js与OBJLoader保留原MIT声明。ECON、CameraHMR、SMPL-X、PIXIE及相关数据/模型不因本仓库MIT而获得再分发或商业使用授权。
-
-## 2026-11-21 集成更新
-
-- 人物歧义时暂停并显示编号框，用户点击确认后才创建选定目标的子任务；单人流程不增加人工步骤，不默认选择最大框。目标裁剪不改变比例，记录原图坐标映射及选择身份，CameraHMR、人脸与ECON使用同一裁剪。不同目标不共用阶段缓存。
-- `econ_failure.py`保留ECON日志中的实际异常；启动失败也从本次命令日志提取原因，避免被后续参数文件缺失覆盖。
-- `econ_paths.py`为恢复创建独立`econ_attempt_XX`输出，并通过`econ_attempt.json`记录当前目录。参数读取、模型生成和任务阶段查询跟随同一目录，保留旧日志与失败记录。恢复不改变权重、35维定义或拟合配置。
-- `cache_manifest`、`cache_features`、`cache_detector_results`是可选的历史缓存路径，默认空值；不完整或不存在时执行新图流程。无需原研究目录，但仍需要下面所列的外部运行组件和私有回归配置。
-
-本机已验证选人后双模型输出与独立目录恢复；这是工程能力记录，不是新的精度或全自动成功率结论。公开副本只验证配置和CPU替身接线，**尚未完成独立安装或完整推理验收**。
-
-```powershell
-& '<服务Python路径>' ./validate_release.py
-& '<服务Python路径>' ./validate_target_recovery.py
-```
-
-两条检查均不加载模型、不运行GPU。第二条只使用临时目录、合成图片和子进程替身，覆盖可选缓存缺失、目标身份隔离、恢复目录及首错传递。
-
-### 手动接续
-
-失败或部分失败且接口允许接续时，工作台显示“继续处理”；“重新连接”只查询状态。接续保留输入、已选目标和成功结果，仅执行未完成阶段；重复点击不会重复排队，没有自动重试循环。内存、路径或环境故障需先处理，按钮不能保证消除故障。从头运行验收任务仍不允许接续。耗时区分本次接续与先前完成阶段，不拼成首次完整耗时。
-
-新增流程仅用临时目录与阶段/网络替身验证，可运行`validate_resume.py`和`node validate_resume_ui.cjs`；不调用GPU，不包含私人任务数据。
-
-### 取消排队
-
-排队时可点击“取消排队”。后端在启动与取消共用的锁内检查状态；任务已开始则返回“任务已开始，未取消”，不会终止模型进程。取消任务保存为独立的`cancelled`状态，保留输入与记录，工作线程取到后跳过，不计为推理失败；刷新后仍可查看。重复取消无副作用，不自动重新提交。
-
-`validate_cancel.py`和`node validate_cancel_ui.cjs`使用临时目录及CPU替身，验证取消、重复请求、开始竞争与页面终态，无真实推理。
+自有代码采用 [MIT](LICENSE)。第三方代码、模型和数据遵循各自条款，范围见 [许可说明](LICENSE_STATUS.md)。仓库不包含人物照片、网格、任务日志、凭据或模型权重。
